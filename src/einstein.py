@@ -1,13 +1,11 @@
 '''
 Ordering:
 
-| Brit      | Blue   | Beer   | Blends      | Bird  |
-| Dane      | Green  | Coffee | Bluemasters | Cat   |
-| German    | Red    | Milk   | Dunhill     | Dog   |
-| Norwegian | White  | Tea    | Pall Mall   | Fish  |
-| Swede     | Yellow | Water  | Prince      | Horse |
-
-For locations, order is left (1) to right (5)
+| Brit (1)      | Blue   | 1 | Beer   | Blends      | Bird  |
+| Dane (2)      | Green  | 2 | Coffee | Bluemasters | Cat   |
+| German (3)    | Red    | 3 | Milk   | Dunhill     | Dog   |
+| Norwegian (4) | White  | 4 | Tea    | Pall Mall   | Fish  |
+| Swede (5)     | Yellow | 5 | Water  | Prince      | Horse |
 
 e.g.
 `The Brit lives in the red house' is h1,3
@@ -29,7 +27,6 @@ def main():
                     + [literal for row in pets for literal in row])
     literal_to_num = {literal: str(num+1)
                       for num, literal in enumerate(all_literals)}
-    print(literal_to_num)
 
     clauses = []
 
@@ -59,32 +56,36 @@ def main():
                 clauses.append(f'-{h1} -{l1} -{h2} {l2}')
 
     # The green house's owner drinks coffee.
-    # h{a},2 -> d{a},2
+    # h{a},2 <-> d{a},2
     for a in range(1, 6):
         h = literal_to_num[f'h{a},2']
         d = literal_to_num[f'd{a},2']
         clauses.append(f'-{h} {d}')
+        clauses.append(f'{h} -{d}')
 
     # The person who smokes Pall Mall rears birds.
-    # s{a},4 -> p{a},1
+    # s{a},4 <-> p{a},1
     for a in range(1, 6):
         s = literal_to_num[f's{a},4']
         p = literal_to_num[f'p{a},1']
         clauses.append(f'-{s} {p}')
+        clauses.append(f'{s} -{p}')
 
     # The owner of the yellow house smokes Dunhill.
-    # h{a},5 -> s{a},3
+    # h{a},5 <-> s{a},3
     for a in range(1, 6):
         h = literal_to_num[f'h{a},5']
         s = literal_to_num[f's{a},3']
         clauses.append(f'-{h} {s}')
+        clauses.append(f'{h} -{s}')
 
     # The man living in the center house drinks milk.
-    # l{a},3 -> d{a},3
+    # l{a},3 <-> d{a},3
     for a in range(1, 6):
         l = literal_to_num[f'l{a},3']
         d = literal_to_num[f'd{a},3']
         clauses.append(f'-{l} {d}')
+        clauses.append(f'{l} -{d}')
 
     # The Norwegian lives in the first house.
     # l4,1
@@ -135,11 +136,12 @@ def main():
                     clauses.append(f'-{p} -{l1} -{s} {l2} {l3}')
 
     # The owner who smokes Bluemasters drinks beer.
-    # s{a},2 -> d{a},1
+    # s{a},2 <-> d{a},1
     for a in range(1, 6):
         s = literal_to_num[f's{a},2']
         d = literal_to_num[f'd{a},1']
         clauses.append(f'-{s} {d}')
+        clauses.append(f'{s} -{d}')
 
     # The German smokes Prince.
     # s3,5
@@ -147,6 +149,7 @@ def main():
 
     # The Norwegian lives next to the blue house.
     # (l4,{a} * h{b},1) -> (l{b},{a-1} + l{b},{a+1})
+    clauses.append('-' + literal_to_num[f'h4,1'])
     for a in range(1, 6):
         for b in range(1, 6):
             if b == 4:

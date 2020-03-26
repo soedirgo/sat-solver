@@ -1,7 +1,9 @@
+import os
 import random
 import solver
 import subprocess
 import sys
+import time
 
 TEST_CNF_PATH = 'test.cnf'
 
@@ -10,6 +12,7 @@ def main():
     num_vars = int(sys.argv[1])
     num_clauses = int(sys.argv[2])
     n = int(sys.argv[3])
+    start = time.process_time()
     for i in range(n):
         with open(TEST_CNF_PATH, 'w') as f:
             f.write('p cnf {} {}\n'.format(num_vars, num_clauses))
@@ -29,12 +32,13 @@ def main():
                 expected = subprocess.run(
                     "cat " + TEST_CNF_PATH +
                     "| docker run --rm -i msoos/cryptominisat "
-                    "| tail -n 1 | awk '{print substr($2, 0)}'",
+                    "| tail -n 1 | awk '{print substr($0, 3, length($0)-4)}'",
                     shell=True,
                     capture_output=True,
                 ).stdout.decode('utf-8')
                 if expected[:5] == 'UNSAT':
                     continue
+                print(expected)
                 raise Exception(
                     'Fail on iter {}. Expected: {}. Actual: {}.'.format(
                         i,
@@ -47,15 +51,15 @@ def main():
                     for line in lines:
                         if line[0] == 'p':
                             p = line.split()
-                            temp.write('p cnf {} {}\n'.format(
-                                p[2], int(p[3])+1))
+                            temp.write(f'p cnf {p[2]} {int(p[3])+int(p[2])}\n')
                         else:
                             temp.write(line)
-                    temp.write(output + ' 0')
+                    for lit in output.split():
+                        temp.write(f'{lit} 0\n')
                 expected = subprocess.run(
                     "cat temp.cnf "
                     "| docker run --rm -i msoos/cryptominisat "
-                    "| tail -n 1 | awk '{print substr($2, 0)}'",
+                    "| tail -n 1 | awk '{print substr($0, 3, length($0)-4)}'",
                     shell=True,
                     capture_output=True
                 ).stdout.decode('utf-8')
@@ -66,6 +70,8 @@ def main():
                             i,
                             output
                         ))
+    print(f'Time elapsed: {time.process_time() - start}')
+    os.system('say -v Zarvox And Skynet said, Let there be light: and there was light.')
 
 
 if __name__ == '__main__':

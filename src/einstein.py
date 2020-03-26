@@ -14,6 +14,9 @@ e.g.
 
 
 def main():
+    '''Generates the DIMACS .cnf file of Einstein's Puzzle.
+
+    '''
     houses = [[f'h{i},{j}' for j in range(1, 6)] for i in range(1, 6)]
     locations = [[f'l{i},{j}' for j in range(1, 6)] for i in range(1, 6)]
     drinks = [[f'd{i},{j}' for j in range(1, 6)] for i in range(1, 6)]
@@ -44,16 +47,16 @@ def main():
 
     # The green house is on the left of the white house.
     # (h{a},2 * l{a},{b} * h{c},4) -> l{c},{b+1}
+    # (h{a},2 * l{c},{b+1} * h{c},4) -> l{a},{b}
     for a in range(1, 6):
         for b in range(1, 5):
             for c in range(1, 6):
-                if a == c:
-                    continue
                 h1 = literal_to_num[f'h{a},2']
                 l1 = literal_to_num[f'l{a},{b}']
                 h2 = literal_to_num[f'h{c},4']
                 l2 = literal_to_num[f'l{c},{b+1}']
                 clauses.append(f'-{h1} -{l1} -{h2} {l2}')
+                clauses.append(f'-{h1} -{l2} -{h2} {l1}')
 
     # The green house's owner drinks coffee.
     # h{a},2 <-> d{a},2
@@ -93,12 +96,10 @@ def main():
 
     # The man who smokes Blends lives next to the one who keeps cats.
     # (s{a},1 * l{a},{b} * p{c},2) -> (l{c},{b-1} + l{c},{b+1})
+    # (s{a},1 * l{c},{b} * p{c},2) -> (l{a},{b-1} + l{a},{b+1})
     for a in range(1, 6):
         for b in range(1, 6):
             for c in range(1, 6):
-                if a == c:
-                    continue
-
                 s = literal_to_num[f's{a},1']
                 l1 = literal_to_num[f'l{a},{b}']
                 p = literal_to_num[f'p{c},2']
@@ -113,14 +114,24 @@ def main():
                     l3 = literal_to_num[f'l{c},{b+1}']
                     clauses.append(f'-{s} -{l1} -{p} {l2} {l3}')
 
+                l1 = literal_to_num[f'l{c},{b}']
+                if b == 1:
+                    l2 = literal_to_num[f'l{a},{b+1}']
+                    clauses.append(f'-{s} -{l1} -{p} {l2}')
+                elif b == 5:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    clauses.append(f'-{s} -{l1} -{p} {l2}')
+                else:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    l3 = literal_to_num[f'l{a},{b+1}']
+                    clauses.append(f'-{s} -{l1} -{p} {l2} {l3}')
+
     # The man who keeps the horse lives next to the man who smokes Dunhill.
     # (p{a},5 * l{a},{b} * s{c},3) -> (l{c},{b-1} + l{c},{b+1})
+    # (p{a},5 * l{c},{b} * s{c},3) -> (l{a},{b-1} + l{a},{b+1})
     for a in range(1, 6):
         for b in range(1, 6):
             for c in range(1, 6):
-                if a == c:
-                    continue
-
                 p = literal_to_num[f'p{a},5']
                 l1 = literal_to_num[f'l{a},{b}']
                 s = literal_to_num[f's{c},3']
@@ -133,6 +144,18 @@ def main():
                 else:
                     l2 = literal_to_num[f'l{c},{b-1}']
                     l3 = literal_to_num[f'l{c},{b+1}']
+                    clauses.append(f'-{p} -{l1} -{s} {l2} {l3}')
+
+                l1 = literal_to_num[f'l{c},{b}']
+                if b == 1:
+                    l2 = literal_to_num[f'l{a},{b+1}']
+                    clauses.append(f'-{p} -{l1} -{s} {l2}')
+                elif b == 5:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    clauses.append(f'-{p} -{l1} -{s} {l2}')
+                else:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    l3 = literal_to_num[f'l{a},{b+1}']
                     clauses.append(f'-{p} -{l1} -{s} {l2} {l3}')
 
     # The owner who smokes Bluemasters drinks beer.
@@ -149,12 +172,9 @@ def main():
 
     # The Norwegian lives next to the blue house.
     # (l4,{a} * h{b},1) -> (l{b},{a-1} + l{b},{a+1})
-    clauses.append('-' + literal_to_num[f'h4,1'])
+    # (l{b},{a} * h{b},1) -> (l4,{a-1} + l4,{a+1})
     for a in range(1, 6):
         for b in range(1, 6):
-            if b == 4:
-                continue
-
             l1 = literal_to_num[f'l4,{a}']
             h = literal_to_num[f'h{b},1']
             if a == 1:
@@ -168,14 +188,24 @@ def main():
                 l3 = literal_to_num[f'l{b},{a+1}']
                 clauses.append(f'-{l1} -{h} {l2} {l3}')
 
+            l1 = literal_to_num[f'l{b},{a}']
+            if a == 1:
+                l2 = literal_to_num[f'l4,{a+1}']
+                clauses.append(f'-{l1} -{h} {l2}')
+            elif a == 5:
+                l2 = literal_to_num[f'l4,{a-1}']
+                clauses.append(f'-{l1} -{h} {l2}')
+            else:
+                l2 = literal_to_num[f'l4,{a-1}']
+                l3 = literal_to_num[f'l4,{a+1}']
+                clauses.append(f'-{l1} -{h} {l2} {l3}')
+
     # The man who smokes Blends has a neighbor who drinks water.
     # (s{a},1 * l{a},{b} * d{c},5) -> (l{c},{b-1} + l{c},{b+1})
+    # (s{a},1 * l{c},{b} * d{c},5) -> (l{a},{b-1} + l{a},{b+1})
     for a in range(1, 6):
         for b in range(1, 6):
             for c in range(1, 6):
-                if a == c:
-                    continue
-
                 s = literal_to_num[f'p{a},5']
                 l1 = literal_to_num[f'l{a},{b}']
                 d = literal_to_num[f's{c},3']
@@ -188,6 +218,18 @@ def main():
                 else:
                     l2 = literal_to_num[f'l{c},{b-1}']
                     l3 = literal_to_num[f'l{c},{b+1}']
+                    clauses.append(f'-{s} -{l1} -{d} {l2} {l3}')
+
+                l1 = literal_to_num[f'l{c},{b}']
+                if b == 1:
+                    l2 = literal_to_num[f'l{a},{b+1}']
+                    clauses.append(f'-{s} -{l1} -{d} {l2}')
+                elif b == 5:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    clauses.append(f'-{s} -{l1} -{d} {l2}')
+                else:
+                    l2 = literal_to_num[f'l{a},{b-1}']
+                    l3 = literal_to_num[f'l{a},{b+1}']
                     clauses.append(f'-{s} -{l1} -{d} {l2} {l3}')
 
     # Only one person per house, one house per person, one person per pet, one

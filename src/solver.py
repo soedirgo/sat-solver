@@ -1,7 +1,30 @@
 from copy import deepcopy
+from fractions import Fraction
+from queue import Queue
 
 
 class Solver:
+    '''CNF-solver implementation. Uses CDCL and restarts.
+
+    Important components:
+
+    clauses: The clause database, including learnt clauses.
+
+    var_index: For each literal, we keep an index of all clauses in which the
+    literal occurs. Used in unit propagation.
+
+    cur_clauses: Current set of clauses, affected by propagation.
+
+    cur_var_index: Current var_index, affected by propagation.
+
+    decisions: Stores all variable assignments.
+
+    i_graph: Implication graph. Stores reasons for each literal, i.e. variable
+    assignments that imply the assignment of the literal. Used in clause
+    learning.
+
+    level: Current decision level.
+    '''
     def __init__(self, dimacs_path):
         with open(dimacs_path) as f:
             lines = f.read().splitlines()
@@ -23,6 +46,24 @@ class Solver:
             f.write(self.cdcl())
 
     def cdcl(self) -> str:
+        '''
+        CDCL:
+        loop
+            propagate
+            if conflict:
+                if conflict at top level:
+                    UNSAT
+                else:
+                    analyze
+                    backtrack
+            else:
+                if all variables are assigned:
+                    return model
+                else:
+                    decide
+
+        (adapted from `http://minisat.se/downloads/MiniSat.pdf`)
+        '''
         self.restart()
         while True:
             conflict = self.propagate()
@@ -119,29 +160,68 @@ class Solver:
 
     def analyze(self, l):
         # find first unique implication point (1-UIP)
-        paths = []
 
-        def explore(lit, path):
-            if self.i_graph[lit][0] != self.level:
-                return
-            if len(self.i_graph[lit][1]) == 0:
-                paths.append(path)
-                return
-            for next_lit in self.i_graph[lit][1]:
-                explore(next_lit, path + [next_lit])
+        # paths = []
 
-        explore(l, [l])
-        explore(-l, [-l])
+        # def explore(lit, path):
+        #     if self.i_graph[lit][0] != self.level:
+        #         return
+        #     if len(self.i_graph[lit][1]) == 0:
+        #         paths.append(path)
+        #         return
+        #     for next_lit in self.i_graph[lit][1]:
+        #         explore(next_lit, path + [next_lit])
 
-        lits_in_level = [lit for lit in self.decisions[self.level]]
-        uips = [lit for lit in lits_in_level
-                if all(lit in path for path in paths)]
-        path = paths[0]
-        for lit in path:
-            if lit in uips:
-                fuip = lit
-                break
+        # explore(l, [l])
+        # explore(-l, [-l])
 
+        # lits_in_level = [lit for lit in self.decisions[self.level]]
+        # uips = [lit for lit in lits_in_level
+        #         if all(lit in path for path in paths)]
+        # path = paths[0]
+        # for lit in path:
+        #     if lit in uips:
+        #         fuip = lit
+        #         break
+
+        uips = set()
+
+        def explore(lit, weight):
+            weights[lit] += weight
+            next_lits = [next_lit
+                         for next_lit in self.i_graph[lit][1]
+                         if self.i_graph[next_lit][0] == self.level]
+            for next_lit in next_lits:
+                explore(next_lit, weight / len(next_lits))
+
+        weights = {lit: Fraction() for lit in self.decisions[self.level]}
+        explore(l, Fraction(1.))
+
+        for lit in weights.keys():
+            if weights[lit] == Fraction(1.):
+                uips.add(lit)
+        uips.discard(l)
+
+        weights = {lit: Fraction() for lit in self.decisions[self.level]}
+        explore(-l, Fraction(1.))
+
+        for lit in weights.keys():
+            if weights[lit] == Fraction(1.) and lit in uips:
+                continue
+
+            uips.discard(lit)
+
+        # lit = l
+        # while True:
+        #     for next_lit in self.i_graph[lit][1]:
+        #         if self.i_graph[next_lit][0] == self.level:
+        #             lit = next_lit
+        #             break
+        #     if lit in uips:
+        #         fuip = lit
+        #         break
+
+        # find cut
         new_clause = set()
 
         def find_cut(lit):
@@ -160,3 +240,9 @@ class Solver:
         new_clause_idx = len(self.clauses) - 1
         for lit in new_clause:
             self.var_index[lit].add(new_clause_idx)
+
+if __name__ == '__main__':
+    s = Solver('test.cnf')
+    s.solve()
+    s = Solver('test.cnf')
+    s.solve()

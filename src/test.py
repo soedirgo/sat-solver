@@ -12,7 +12,7 @@ def main():
     num_vars = int(sys.argv[1])
     num_clauses = int(sys.argv[2])
     n = int(sys.argv[3])
-    start = time.process_time()
+    start = time.time()
     for i in range(n):
         with open(TEST_CNF_PATH, 'w') as f:
             f.write('p cnf {} {}\n'.format(num_vars, num_clauses))
@@ -70,7 +70,7 @@ def main():
                             i,
                             output
                         ))
-    print(f'Time elapsed: {time.process_time() - start}')
+    print(f'Time elapsed: {time.time() - start}')
     os.system('say -v Zarvox And Skynet said, Let there be light: and there was light.')
 
 

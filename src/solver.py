@@ -102,7 +102,7 @@ class Solver:
         # clause, unless we are at the first iteration (0th level)
         if self.level == 0:
             for clause in self.clauses:
-                if len(clause) == 1:
+                if clause.is_unit():
                     lit = clause[0].to_int()
                     unit_literals.add(lit)
                     self.decisions[self.level].add(lit)
@@ -122,7 +122,7 @@ class Solver:
                 if clause.is_satisfied():
                     # nothing to do
                     continue
-                elif len(clause) == 1:
+                elif clause.is_unit():
                     # new unit clause found
                     unit_lit = clause.get_unset().to_int()
                     if unit_lit in self.i_graph:
@@ -283,7 +283,10 @@ class Clause:
         return self.lits[key]
 
     def __len__(self):
-        return sum(lit.is_unset() for lit in self.lits)
+        return len(self.lits)
+
+    def is_unit(self):
+        return sum(lit.is_unset() for lit in self.lits) == 1
 
     def __iter__(self):
         yield from self.lits

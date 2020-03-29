@@ -1,9 +1,8 @@
 from copy import deepcopy
 from fractions import Fraction
-from heapq import heapify, heappush, heappop
-from math import frexp, ldexp
+from heapq import heapify, heappop
 
-DECAY_FACTOR = .95
+BUMP_FACTOR = 1 / .95
 
 
 class Solver:
@@ -39,8 +38,7 @@ class Solver:
                          for i in range(-num_vars, num_vars+1)
                          if i != 0}
 
-        self.var_mult = 1.
-        # self.var_order = {i: 1. for i in self.literals}
+        self.var_inc = -1.
 
         self.watchers = {i: [] for i in self.literals}
 
@@ -48,28 +46,17 @@ class Solver:
                                      for x in clause.split()[:-1]}))
                         for clause in lines[1:]]
 
-        # for i, (p, lit) in enumerate(self.cur_var_order):
-        #     if lit not in clause:
-        #         continue
-
-        #     self.cur_var_order[i] = (p + self.var_mult, lit)
-        #     if self.cur_var_order[i][0] > 1e100:
-        #         for j, (_p, _lit) in enumerate(self.cur_var_order):
-        #             self.cur_var_order[j] = (_p * 1e-100, _lit)
-        #         self.var_mult *= 1e-100
-
-        var_order_dict = {i: 1. for i in self.literals}
+        heap_dict = {i: 1. for i in self.literals}
 
         for i, clause in enumerate(self.clauses):
             for lit in clause:
-                var_order_dict[lit.to_int()] *= self.var_mult
+                heap_dict[lit.to_int()] += self.var_inc
 
             for j in range(min(2, len(clause))):
                 lit = clause[j]
                 self.watchers[-lit.to_int()].append(i)
 
-        self.var_order = [(p, lit) for lit, p in var_order_dict.items()]
-        heapify(self.var_order)
+        self.var_order = [[p, lit] for lit, p in heap_dict.items()]
 
     def solve(self):
         with open('output.txt', 'w') as f:
@@ -107,11 +94,7 @@ class Solver:
                 if self.satisfied():
                     return self.get_model()
                 else:
-                    # print(self.decisions)
-                    # print(self.cur_var_order)
                     self.decide()
-                    # print(self.cur_var_order)
-                    # print()
 
     def propagate(self):
         unit_literals = set()
@@ -182,7 +165,8 @@ class Solver:
     def restart(self):
         for lit in self.literals.values():
             lit.unset()
-        self.cur_var_order = self.var_order.copy()
+        self.cur_var_order = deepcopy(self.var_order)
+        self.var_order_finder = {lit: i for i, [p, lit] in enumerate(self.cur_var_order)}
         self.cur_watchers = deepcopy(self.watchers)
         self.decisions = {0: set()}
         self.i_graph = {}
@@ -194,21 +178,16 @@ class Solver:
                          for l in range(1, len(self.literals)//2 + 1)])
 
     def decide(self):
+        heapify(self.cur_var_order)
+
         next_lit = 0
         while True:
             lit = heappop(self.cur_var_order)[1]
             if self.literals[lit].is_unset():
                 next_lit = lit
                 break
-        # for clause in self.clauses:
-        #     for lit in clause:
-        #         if lit.is_false():
-        #             continue
-        #         if lit.to_int() not in self.i_graph:
-        #             next_lit = lit.to_int()
-        #             break
-        #     if next_lit:
-        #         break
+        self.var_order_finder = {lit: i for i, (p, lit) in enumerate(self.cur_var_order)}
+
         if not next_lit:
             raise Exception(f'unable to choose literal')
 
@@ -274,7 +253,6 @@ class Solver:
         self.add_clause(new_clause)
 
     def add_clause(self, clause):
-        # print(clause)
         self.clauses.append(Clause([self.literals[lit] for lit in clause]))
         clause_idx = len(self.clauses) - 1
         clause_iter = iter(clause)
@@ -282,24 +260,19 @@ class Solver:
             lit = next(clause_iter)
             self.watchers[-lit].append(clause_idx)
 
-        self.var_mult *= DECAY_FACTOR
-        var_order_dict = {lit: p for p, lit in self.cur_var_order}
+        self.var_inc *= BUMP_FACTOR
         for lit in clause:
-            if lit not in var_order_dict:
+            if lit not in self.var_order_finder:
                 continue
 
-            # print(var_order_dict)
-            # print(self.i_graph)
-            var_order_dict[lit] *= self.var_mult
+            var_order_item = self.cur_var_order[self.var_order_finder[lit]]
+            var_order_item[0] += self.var_inc
 
-            if var_order_dict[lit] < 1e-100:
-                for l in var_order_dict:
-                    var_order_dict[l] *= 1e100
-                self.var_mult *= 1e100
+            if var_order_item[0] > 1e100:
+                self.var_inc *= 1e-100
 
-        self.cur_var_order = [(p, lit)
-                              for lit, p in var_order_dict.items()]
-        heapify(self.cur_var_order)
+                for item in self.cur_var_order:
+                    item[0] *= 1e-100
 
 
 class Clause:

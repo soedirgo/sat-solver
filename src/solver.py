@@ -1,5 +1,9 @@
 from copy import deepcopy
 from fractions import Fraction
+from heapq import heapify, heappush, heappop
+from math import frexp, ldexp
+
+DECAY_FACTOR = .95
 
 
 class Solver:
@@ -30,18 +34,42 @@ class Solver:
             lines = [line for line in lines if line[0] != 'c']
         p = lines[0].split()
         num_vars = int(p[2])
+
         self.literals = {i: Lit(i)
                          for i in range(-num_vars, num_vars+1)
                          if i != 0}
+
+        self.var_mult = 1.
+        # self.var_order = {i: 1. for i in self.literals}
+
+        self.watchers = {i: [] for i in self.literals}
+
         self.clauses = [Clause(list({self.literals[int(x)]
                                      for x in clause.split()[:-1]}))
                         for clause in lines[1:]]
-        self.var_index = {i: set()
-                          for i in range(-num_vars, num_vars+1)
-                          if i != 0}
+
+        # for i, (p, lit) in enumerate(self.cur_var_order):
+        #     if lit not in clause:
+        #         continue
+
+        #     self.cur_var_order[i] = (p + self.var_mult, lit)
+        #     if self.cur_var_order[i][0] > 1e100:
+        #         for j, (_p, _lit) in enumerate(self.cur_var_order):
+        #             self.cur_var_order[j] = (_p * 1e-100, _lit)
+        #         self.var_mult *= 1e-100
+
+        var_order_dict = {i: 1. for i in self.literals}
+
         for i, clause in enumerate(self.clauses):
             for lit in clause:
-                self.var_index[lit.to_int()].add(i)
+                var_order_dict[lit.to_int()] *= self.var_mult
+
+            for j in range(min(2, len(clause))):
+                lit = clause[j]
+                self.watchers[-lit.to_int()].append(i)
+
+        self.var_order = [(p, lit) for lit, p in var_order_dict.items()]
+        heapify(self.var_order)
 
     def solve(self):
         with open('output.txt', 'w') as f:
@@ -79,7 +107,11 @@ class Solver:
                 if self.satisfied():
                     return self.get_model()
                 else:
+                    # print(self.decisions)
+                    # print(self.cur_var_order)
                     self.decide()
+                    # print(self.cur_var_order)
+                    # print()
 
     def propagate(self):
         unit_literals = set()
@@ -101,13 +133,13 @@ class Solver:
             self.literals[l].set_true()
             self.literals[-l].set_false()
 
-            neg_indexes = self.cur_var_index[-l].copy()
-            for i in neg_indexes:
+            indexes = self.cur_watchers[l].copy()
+            for i in indexes:
                 clause = self.clauses[i]
                 if clause.is_satisfied():
+                    # nothing to do
                     continue
-
-                if len(clause) == 1:
+                elif len(clause) == 1:
                     # new unit clause found
                     unit_lit = clause.get_unset().to_int()
                     if unit_lit in self.i_graph:
@@ -116,36 +148,42 @@ class Solver:
 
                     self.decisions[self.level].add(unit_lit)
                     reason = [-lit.to_int()
-                              for lit in self.clauses[i]
+                              for lit in clause
                               if lit.to_int() != unit_lit]
                     self.i_graph[unit_lit] = (self.level, reason)
                 elif clause.is_empty():
                     # conflict found
+                    self.decisions[self.level].add(-l)
                     reason = [-lit.to_int()
-                              for lit in self.clauses[i]]
-                              # if lit.to_int() != -l]
+                              for lit in clause
+                              if lit.to_int() != -l]
                     self.i_graph[-l] = (self.level, reason)
                     return l
-            self.cur_var_index[-l].clear()
+                else:
+                    # clause not satisfied, modify watchers
+                    thing = iter(clause)
+                    while True:
+                        lit = next(thing)
+                        if not lit.is_unset():
+                            continue
+                        lit = lit.to_int()
+                        if i in self.cur_watchers[-lit]:
+                            continue
 
-            indexes = self.cur_var_index[l].copy()
-            for idx in indexes:
-                for lit in self.clauses[idx]:
-                    self.cur_var_index[lit.to_int()].discard(idx)
+                        self.cur_watchers[l].remove(i)
+                        self.cur_watchers[-lit].append(i)
+                        break
 
         return False
 
     def satisfied(self):
-        for clause in self.clauses:
-            if not clause.is_satisfied():
-                return False
-        return True
-        # return all(clause.is_satisfied() for clause in self.clauses)
+        return all(clause.is_satisfied() for clause in self.clauses)
 
     def restart(self):
         for lit in self.literals.values():
             lit.unset()
-        self.cur_var_index = deepcopy(self.var_index)
+        self.cur_var_order = self.var_order.copy()
+        self.cur_watchers = deepcopy(self.watchers)
         self.decisions = {0: set()}
         self.i_graph = {}
         self.level = 0
@@ -157,15 +195,20 @@ class Solver:
 
     def decide(self):
         next_lit = 0
-        for clause in self.clauses:
-            for lit in clause:
-                if lit.is_false():
-                    continue
-                if lit.to_int() not in self.i_graph:
-                    next_lit = lit.to_int()
-                    break
-            if next_lit:
+        while True:
+            lit = heappop(self.cur_var_order)[1]
+            if self.literals[lit].is_unset():
+                next_lit = lit
                 break
+        # for clause in self.clauses:
+        #     for lit in clause:
+        #         if lit.is_false():
+        #             continue
+        #         if lit.to_int() not in self.i_graph:
+        #             next_lit = lit.to_int()
+        #             break
+        #     if next_lit:
+        #         break
         if not next_lit:
             raise Exception(f'unable to choose literal')
 
@@ -175,19 +218,14 @@ class Solver:
 
     def analyze(self, l):
         # find first unique implication point (1-UIP)
-
         uips = set()
         weights = {lit: Fraction() for lit in self.decisions[self.level]}
 
         def explore(lit, weight):
             weights[lit] += weight
-            # next_lits = [next_lit
-            #              for next_lit in self.i_graph[lit][1]
-            #              if self.i_graph[next_lit][0] == self.level]
-            next_lits = []
-            for next_lit in self.i_graph[lit][1]:
-                if self.i_graph[next_lit][0] == self.level:
-                    next_lits.append(next_lit)
+            next_lits = [next_lit
+                         for next_lit in self.i_graph[lit][1]
+                         if self.i_graph[next_lit][0] == self.level]
             for next_lit in next_lits:
                 explore(next_lit, weight / len(next_lits))
 
@@ -233,10 +271,35 @@ class Solver:
         find_cut(l)
         find_cut(-l)
 
-        self.clauses.append(Clause([self.literals[lit] for lit in new_clause]))
-        new_clause_idx = len(self.clauses) - 1
-        for lit in new_clause:
-            self.var_index[lit].add(new_clause_idx)
+        self.add_clause(new_clause)
+
+    def add_clause(self, clause):
+        # print(clause)
+        self.clauses.append(Clause([self.literals[lit] for lit in clause]))
+        clause_idx = len(self.clauses) - 1
+        clause_iter = iter(clause)
+        for i in range(min(2, len(clause))):
+            lit = next(clause_iter)
+            self.watchers[-lit].append(clause_idx)
+
+        self.var_mult *= DECAY_FACTOR
+        var_order_dict = {lit: p for p, lit in self.cur_var_order}
+        for lit in clause:
+            if lit not in var_order_dict:
+                continue
+
+            # print(var_order_dict)
+            # print(self.i_graph)
+            var_order_dict[lit] *= self.var_mult
+
+            if var_order_dict[lit] < 1e-100:
+                for l in var_order_dict:
+                    var_order_dict[l] *= 1e100
+                self.var_mult *= 1e100
+
+        self.cur_var_order = [(p, lit)
+                              for lit, p in var_order_dict.items()]
+        heapify(self.cur_var_order)
 
 
 class Clause:

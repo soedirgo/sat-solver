@@ -22,8 +22,14 @@ def main():
                                          * random.choice([-1, 1])))
                 f.write('0\n')
 
-        sat_solver = solver.Solver(TEST_CNF_PATH)
-        sat_solver.solve()
+        # sat_solver = solver.Solver(TEST_CNF_PATH)
+        # sat_solver.solve()
+
+        subprocess.run(
+            "cargo run -- test.cnf -o output.txt",
+            shell=True,
+            capture_output=True
+        ).stdout.decode('utf-8')
 
         with open('output.txt') as f:
             output = f.read()
@@ -71,7 +77,7 @@ def main():
                             output
                         ))
     print(f'Time elapsed: {time.time() - start}')
-    os.system('say -v Zarvox And Skynet said, Let there be light: and there was light.')
+    # os.system('say -v Zarvox And Skynet said, Let there be light: and there was light.')
 
 
 if __name__ == '__main__':

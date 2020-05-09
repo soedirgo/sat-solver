@@ -3,6 +3,8 @@ name = "sat-solver"
 version = "0.1.0"
 authors = ["Bobbie Soedirgo <bobbie@soedirgo.dev>"]
 edition = "2018"
+description = "CDCL SAT solver using 2WL and restarts."
+license = "Unlicense"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
